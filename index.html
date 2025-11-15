@@ -1,0 +1,501 @@
+import React, { useState, useEffect } from ‘react’;
+import { Trash2, Plus, Check, Calendar, Filter, Edit2, X, Save, Search, TrendingUp, Clock, Zap } from ‘lucide-react’;
+
+export default function TodoList() {
+const [tasks, setTasks] = useState([]);
+const [inputValue, setInputValue] = useState(’’);
+const [priority, setPriority] = useState(‘medium’);
+const [dueDate, setDueDate] = useState(’’);
+const [filter, setFilter] = useState(‘all’);
+const [category, setCategory] = useState(‘personal’);
+const [searchQuery, setSearchQuery] = useState(’’);
+const [editingId, setEditingId] = useState(null);
+const [editText, setEditText] = useState(’’);
+const [sortBy, setSortBy] = useState(‘priority’);
+const [showStats, setShowStats] = useState(false);
+
+useEffect(() => {
+const loadTasks = async () => {
+try {
+const result = await window.storage.get(‘tasks’);
+if (result && result.value) {
+setTasks(JSON.parse(result.value));
+}
+} catch (error) {
+console.log(‘No saved tasks found’);
+}
+};
+loadTasks();
+}, []);
+
+useEffect(() => {
+const saveTasks = async () => {
+if (tasks.length >= 0) {
+try {
+await window.storage.set(‘tasks’, JSON.stringify(tasks));
+} catch (error) {
+console.error(‘Failed to save tasks:’, error);
+}
+}
+};
+saveTasks();
+}, [tasks]);
+
+const addTask = () => {
+if (inputValue.trim()) {
+setTasks([…tasks, {
+id: Date.now(),
+text: inputValue,
+completed: false,
+priority: priority,
+dueDate: dueDate,
+category: category,
+createdAt: new Date().toISOString(),
+completedAt: null,
+notes: ‘’
+}]);
+setInputValue(’’);
+setDueDate(’’);
+}
+};
+
+const toggleTask = (id) => {
+setTasks(tasks.map(task =>
+task.id === id ? {
+…task,
+completed: !task.completed,
+completedAt: !task.completed ? new Date().toISOString() : null
+} : task
+));
+};
+
+const deleteTask = (id) => {
+setTasks(tasks.filter(task => task.id !== id));
+};
+
+const startEdit = (task) => {
+setEditingId(task.id);
+setEditText(task.text);
+};
+
+const saveEdit = (id) => {
+setTasks(tasks.map(task =>
+task.id === id ? { …task, text: editText } : task
+));
+setEditingId(null);
+};
+
+const cancelEdit = () => {
+setEditingId(null);
+setEditText(’’);
+};
+
+const handleKeyPress = (e) => {
+if (e.key === ‘Enter’) {
+addTask();
+}
+};
+
+const getPriorityColor = (p) => {
+switch(p) {
+case ‘high’: return ‘bg-red-100 border-red-300 text-red-700’;
+case ‘medium’: return ‘bg-yellow-100 border-yellow-300 text-yellow-700’;
+case ‘low’: return ‘bg-green-100 border-green-300 text-green-700’;
+default: return ‘bg-gray-100 border-gray-300’;
+}
+};
+
+const getPriorityIcon = (p) => {
+switch(p) {
+case ‘high’: return ‘🔥’;
+case ‘medium’: return ‘⚡’;
+case ‘low’: return ‘🌱’;
+default: return ‘’;
+}
+};
+
+const getCategoryLabel = (c) => {
+switch(c) {
+case ‘personal’: return ‘👤 شخصي’;
+case ‘work’: return ‘💼 عمل’;
+case ‘shopping’: return ‘🛒 تسوق’;
+case ‘health’: return ‘💪 صحة’;
+case ‘study’: return ‘📚 دراسة’;
+case ‘finance’: return ‘💰 مالية’;
+default: return c;
+}
+};
+
+const isOverdue = (date, completed) => {
+if (!date || completed) return false;
+return new Date(date) < new Date();
+};
+
+const getDaysRemaining = (date) => {
+if (!date) return null;
+const diff = new Date(date) - new Date();
+const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+return days;
+};
+
+const filteredTasks = tasks.filter(task => {
+if (filter === ‘active’) return !task.completed;
+if (filter === ‘completed’) return task.completed;
+if (filter === ‘today’) {
+if (!task.dueDate) return false;
+const today = new Date().toDateString();
+return new Date(task.dueDate).toDateString() === today;
+}
+if (filter === ‘overdue’) {
+return isOverdue(task.dueDate, task.completed);
+}
+return true;
+}).filter(task =>
+task.text.toLowerCase().includes(searchQuery.toLowerCase())
+).sort((a, b) => {
+if (sortBy === ‘priority’) {
+const priorityOrder = { high: 3, medium: 2, low: 1 };
+return priorityOrder[b.priority] - priorityOrder[a.priority];
+}
+if (sortBy === ‘date’) {
+if (!a.dueDate) return 1;
+if (!b.dueDate) return -1;
+return new Date(a.dueDate) - new Date(b.dueDate);
+}
+if (sortBy === ‘recent’) {
+return new Date(b.createdAt) - new Date(a.createdAt);
+}
+return 0;
+});
+
+const completedCount = tasks.filter(task => task.completed).length;
+const totalCount = tasks.length;
+const activeCount = totalCount - completedCount;
+const overdueCount = tasks.filter(t => isOverdue(t.dueDate, t.completed)).length;
+const todayCount = tasks.filter(t => {
+if (!t.dueDate) return false;
+const today = new Date().toDateString();
+return new Date(t.dueDate).toDateString() === today && !t.completed;
+}).length;
+
+const getCategoryStats = () => {
+const stats = {};
+tasks.forEach(task => {
+if (!task.completed) {
+stats[task.category] = (stats[task.category] || 0) + 1;
+}
+});
+return stats;
+};
+
+return (
+<div className="min-h-screen bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 p-4 md:p-6">
+<div className="max-w-5xl mx-auto">
+<div className="bg-white rounded-3xl shadow-2xl overflow-hidden">
+{/* Header */}
+<div className="bg-gradient-to-r from-purple-600 to-pink-600 p-6 md:p-8 text-white">
+<div className="flex items-center justify-between mb-4">
+<h1 className="text-3xl md:text-4xl font-bold">✨ قائمة المهام الذكية</h1>
+<button
+onClick={() => setShowStats(!showStats)}
+className=“bg-white bg-opacity-20 hover:bg-opacity-30 p-2 rounded-xl transition-all”
+>
+<TrendingUp size={24} />
+</button>
+</div>
+
+```
+        {showStats ? (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+            <div className="bg-white bg-opacity-20 rounded-xl p-4 text-center">
+              <div className="text-2xl font-bold">{totalCount}</div>
+              <div className="text-sm text-purple-100">إجمالي</div>
+            </div>
+            <div className="bg-white bg-opacity-20 rounded-xl p-4 text-center">
+              <div className="text-2xl font-bold">{activeCount}</div>
+              <div className="text-sm text-purple-100">نشطة</div>
+            </div>
+            <div className="bg-white bg-opacity-20 rounded-xl p-4 text-center">
+              <div className="text-2xl font-bold">{todayCount}</div>
+              <div className="text-sm text-purple-100">اليوم</div>
+            </div>
+            <div className="bg-white bg-opacity-20 rounded-xl p-4 text-center">
+              <div className="text-2xl font-bold text-red-200">{overdueCount}</div>
+              <div className="text-sm text-purple-100">متأخرة</div>
+            </div>
+          </div>
+        ) : (
+          <p className="text-center text-purple-100 mb-4">
+            تم إنجاز {completedCount} من {totalCount} مهمة
+          </p>
+        )}
+
+        <div className="bg-white bg-opacity-20 rounded-full h-3 overflow-hidden">
+          <div
+            className="bg-white h-full transition-all duration-500 rounded-full"
+            style={{ width: `${totalCount > 0 ? (completedCount / totalCount) * 100 : 0}%` }}
+          />
+        </div>
+      </div>
+
+      <div className="p-4 md:p-6">
+        {/* Search Bar */}
+        <div className="mb-4">
+          <div className="relative">
+            <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="ابحث عن مهمة..."
+              className="w-full pr-10 pl-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-purple-500 text-right"
+            />
+          </div>
+        </div>
+
+        {/* Add Task Form */}
+        <div className="space-y-3 mb-6 bg-gray-50 rounded-2xl p-4">
+          <input
+            type="text"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyPress={handleKeyPress}
+            placeholder="أضف مهمة جديدة..."
+            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-purple-500 text-right"
+          />
+
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+            <select
+              value={priority}
+              onChange={(e) => setPriority(e.target.value)}
+              className="px-3 py-2 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-purple-500 text-right text-sm"
+            >
+              <option value="low">🌱 منخفضة</option>
+              <option value="medium">⚡ متوسطة</option>
+              <option value="high">🔥 عالية</option>
+            </select>
+
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="px-3 py-2 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-purple-500 text-right text-sm"
+            >
+              <option value="personal">👤 شخصي</option>
+              <option value="work">💼 عمل</option>
+              <option value="shopping">🛒 تسوق</option>
+              <option value="health">💪 صحة</option>
+              <option value="study">📚 دراسة</option>
+              <option value="finance">💰 مالية</option>
+            </select>
+
+            <input
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              className="px-3 py-2 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-purple-500 text-sm"
+            />
+
+            <button
+              onClick={addTask}
+              className="md:col-span-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white px-4 py-2 rounded-xl flex items-center justify-center gap-2 transition-all font-bold"
+            >
+              <Plus size={20} />
+              إضافة مهمة
+            </button>
+          </div>
+        </div>
+
+        {/* Filters and Sort */}
+        <div className="flex flex-wrap gap-2 mb-4">
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => setFilter('all')}
+              className={`px-3 py-1.5 rounded-lg text-sm transition-all ${filter === 'all' ? 'bg-purple-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+            >
+              الكل ({totalCount})
+            </button>
+            <button
+              onClick={() => setFilter('active')}
+              className={`px-3 py-1.5 rounded-lg text-sm transition-all ${filter === 'active' ? 'bg-purple-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+            >
+              نشطة ({activeCount})
+            </button>
+            <button
+              onClick={() => setFilter('today')}
+              className={`px-3 py-1.5 rounded-lg text-sm transition-all ${filter === 'today' ? 'bg-purple-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+            >
+              اليوم ({todayCount})
+            </button>
+            <button
+              onClick={() => setFilter('overdue')}
+              className={`px-3 py-1.5 rounded-lg text-sm transition-all ${filter === 'overdue' ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+            >
+              متأخرة ({overdueCount})
+            </button>
+            <button
+              onClick={() => setFilter('completed')}
+              className={`px-3 py-1.5 rounded-lg text-sm transition-all ${filter === 'completed' ? 'bg-purple-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+            >
+              مكتملة ({completedCount})
+            </button>
+          </div>
+
+          <div className="mr-auto flex gap-2">
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="px-3 py-1.5 border-2 border-gray-200 rounded-lg text-sm focus:outline-none focus:border-purple-500"
+            >
+              <option value="priority">حسب الأولوية</option>
+              <option value="date">حسب التاريخ</option>
+              <option value="recent">الأحدث</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Tasks List */}
+        <div className="space-y-3 max-h-96 overflow-y-auto">
+          {filteredTasks.length === 0 ? (
+            <div className="text-center py-12 text-gray-400">
+              <Zap size={48} className="mx-auto mb-4 text-gray-300" />
+              <p className="text-lg font-medium">
+                {searchQuery ? 'لم يتم العثور على نتائج' : 'لا توجد مهام'}
+              </p>
+              <p className="text-sm mt-2">
+                {searchQuery ? 'جرب كلمات بحث أخرى' : 'أضف مهمتك الأولى للبدء!'}
+              </p>
+            </div>
+          ) : (
+            filteredTasks.map(task => (
+              <div
+                key={task.id}
+                className={`flex items-start gap-3 p-4 rounded-xl border-2 transition-all group ${
+                  task.completed 
+                    ? 'bg-gray-50 border-gray-200' 
+                    : isOverdue(task.dueDate, task.completed)
+                    ? 'bg-red-50 border-red-200 hover:border-red-300'
+                    : 'bg-white border-gray-200 hover:border-purple-300 hover:shadow-md'
+                }`}
+              >
+                <button
+                  onClick={() => toggleTask(task.id)}
+                  className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all flex-shrink-0 mt-1 ${
+                    task.completed
+                      ? 'bg-green-500 border-green-500'
+                      : 'border-gray-300 hover:border-purple-500 hover:scale-110'
+                  }`}
+                >
+                  {task.completed && <Check size={16} className="text-white" />}
+                </button>
+
+                <div className="flex-1 text-right">
+                  {editingId === task.id ? (
+                    <div className="flex gap-2 mb-2">
+                      <button
+                        onClick={cancelEdit}
+                        className="p-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                      >
+                        <X size={16} />
+                      </button>
+                      <button
+                        onClick={() => saveEdit(task.id)}
+                        className="p-1.5 bg-green-100 hover:bg-green-200 text-green-600 rounded-lg transition-colors"
+                      >
+                        <Save size={16} />
+                      </button>
+                      <input
+                        type="text"
+                        value={editText}
+                        onChange={(e) => setEditText(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && saveEdit(task.id)}
+                        className="flex-1 px-3 py-1.5 border-2 border-purple-300 rounded-lg text-right focus:outline-none"
+                        autoFocus
+                      />
+                    </div>
+                  ) : (
+                    <p className={`font-medium ${task.completed ? 'line-through text-gray-400' : 'text-gray-800'}`}>
+                      {task.text}
+                    </p>
+                  )}
+
+                  <div className="flex gap-2 mt-2 flex-wrap justify-end">
+                    <span className={`text-xs px-2 py-1 rounded-lg border font-medium ${getPriorityColor(task.priority)}`}>
+                      {getPriorityIcon(task.priority)} {task.priority === 'high' ? 'عالية' : task.priority === 'medium' ? 'متوسطة' : 'منخفضة'}
+                    </span>
+                    <span className="text-xs px-2 py-1 rounded-lg bg-blue-100 text-blue-700 border border-blue-300 font-medium">
+                      {getCategoryLabel(task.category)}
+                    </span>
+                    {task.dueDate && (
+                      <span className={`text-xs px-2 py-1 rounded-lg flex items-center gap-1 font-medium ${
+                        isOverdue(task.dueDate, task.completed) && !task.completed
+                          ? 'bg-red-100 text-red-700 border border-red-300 animate-pulse'
+                          : task.completed
+                          ? 'bg-gray-100 text-gray-500 border border-gray-300'
+                          : getDaysRemaining(task.dueDate) <= 1
+                          ? 'bg-orange-100 text-orange-700 border border-orange-300'
+                          : 'bg-gray-100 text-gray-700 border border-gray-300'
+                      }`}>
+                        <Calendar size={12} />
+                        {new Date(task.dueDate).toLocaleDateString('ar-EG')}
+                        {!task.completed && getDaysRemaining(task.dueDate) !== null && (
+                          <span className="mr-1">
+                            ({getDaysRemaining(task.dueDate) === 0 ? 'اليوم' : 
+                              getDaysRemaining(task.dueDate) < 0 ? `متأخر ${Math.abs(getDaysRemaining(task.dueDate))} يوم` :
+                              `بعد ${getDaysRemaining(task.dueDate)} يوم`})
+                          </span>
+                        )}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {editingId !== task.id && (
+                    <button
+                      onClick={() => startEdit(task)}
+                      className="text-blue-500 hover:bg-blue-50 p-2 rounded-lg transition-all"
+                    >
+                      <Edit2 size={16} />
+                    </button>
+                  )}
+                  <button
+                    onClick={() => deleteTask(task.id)}
+                    className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-all"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Action Buttons */}
+        {tasks.length > 0 && (
+          <div className="mt-6 flex gap-3 flex-wrap">
+            <button
+              onClick={() => setTasks(tasks.filter(t => !t.completed))}
+              className="flex-1 bg-red-100 hover:bg-red-200 text-red-600 py-3 rounded-xl transition-colors font-medium"
+            >
+              حذف المكتملة ({completedCount})
+            </button>
+            <button
+              onClick={() => {
+                if (window.confirm('هل أنت متأكد من حذف جميع المهام؟')) {
+                  setTasks([]);
+                }
+              }}
+              className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 py-3 rounded-xl transition-colors font-medium"
+            >
+              حذف الكل
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  </div>
+</div>
+```
+
+);
+}
